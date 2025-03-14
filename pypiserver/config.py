@@ -415,6 +415,21 @@ def get_parser() -> argparse.ArgumentParser:
         ),
     )
     run_parser.add_argument(
+        "-r",
+        "--read-only-passwords",
+        metavar="READ_ONLY_PASSWORD_FILE",
+        help=(
+            "Use an apache htpasswd file READ_ONLY_PASSWORD_FILE to set "
+            "usernames and passwords for read-only access."
+            "\n\n"
+            "This is useful for allowing authenticated users to download "
+            "packages, but not upload them."
+            "\n\n"
+            "Note that read-only users are also need to be added to the "
+            "password file for general authentication."
+        ),
+    )
+    run_parser.add_argument(
         "--disable-fallback",
         action="store_true",
         help=(
@@ -713,6 +728,7 @@ class RunConfig(_ConfigCommon):
         host: str,
         authenticate: t.List[str],
         password_file: t.Optional[str],
+        read_only_password_file: t.Optional[str],
         disable_fallback: bool,
         fallback_url: str,
         health_endpoint: str,
@@ -732,6 +748,7 @@ class RunConfig(_ConfigCommon):
         self.host = host
         self.authenticate = authenticate
         self.password_file = password_file
+        self.read_only_password_file = read_only_password_file
         self.disable_fallback = disable_fallback
         self.fallback_url = fallback_url
         self.health_endpoint = health_endpoint
@@ -745,6 +762,7 @@ class RunConfig(_ConfigCommon):
         # Derived properties
         self._derived_properties = self._derived_properties + ("auther",)
         self.auther = self.get_auther(auther)
+        self.read_only_clients = self.get_read_only(auther)
 
     @classmethod
     def kwargs_from_namespace(
@@ -757,6 +775,7 @@ class RunConfig(_ConfigCommon):
             "host": namespace.host,
             "authenticate": namespace.authenticate,
             "password_file": namespace.passwords,
+            "read_only_password_file": namespace.read_only_passwords,
             "disable_fallback": namespace.disable_fallback,
             "fallback_url": namespace.fallback_url,
             "health_endpoint": namespace.health_endpoint,
@@ -811,6 +830,25 @@ class RunConfig(_ConfigCommon):
 
         return auther
 
+    def get_read_only(self, auther: t.Optional[t.Callable[[str, str], bool]]) -> t.Callable[[str, str], bool]:
+        if self.read_only_password_file is None:
+            return lambda _uname, _pw: False
+
+        if HtpasswdFile is None:
+            sys.exit(
+                "apache.passlib library is not available. You must install "
+                "pypiserver with the optional 'passlib' dependency (`pip "
+                "install pypiserver['passlib']`) in order to use password "
+                "authentication"
+            )
+
+        loaded_read_only_password_file = HtpasswdFile(self.read_only_password_file)
+
+        def read_only(uname: str, pw: str) -> bool:
+            loaded_read_only_password_file.load_if_changed()
+            return loaded_read_only_password_file.check_password(uname, pw)
+
+        return read_only
 
 class UpdateConfig(_ConfigCommon):
     """A config for the Update command."""

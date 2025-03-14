@@ -58,6 +58,8 @@ class auth:
                     raise HTTPError(
                         401, headers={"WWW-Authenticate": 'Basic realm="pypi"'}
                     )
+                if self.action =="update" and config.read_only_clients(*request.auth):
+                    raise HTTPError(403)
                 if not config.auther(*request.auth):
                     raise HTTPError(403)
             return method(*args, **kwargs)
