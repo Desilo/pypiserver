@@ -850,7 +850,6 @@ class RunConfig(_ConfigCommon):
 
         return read_only
 
-
 class UpdateConfig(_ConfigCommon):
     """A config for the Update command."""
 
